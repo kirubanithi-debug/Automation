@@ -1,0 +1,90 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual Environments
+venv/
+.venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# Unit test / coverage
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+
+# Excel temporary / lock files (opened in MS Excel)
+~$*.xlsx
+~$*.xls
+~$*.xlsm
+
+# Generated Excel test/output files
+sample_data/*_output*.xlsx
+sample_data/test_*.xlsx
+sample_data/final_*.xlsx
+*.xlsx.bak
+
+# Large media / recording files
+*.mp4
+*.avi
+*.mov
+tab_bar.png
+
+# Local logs
+*.log
+logs/
+
+# Local AI runtime feedback store
+learning_store.json
+
+# IDE / Editor configuration
+.vscode/*
+!.vscode/settings.json
+!.vscode/launch.json
+.idea/
+*.sublime-project
+*.sublime-workspace
+*.swp
+*.swo
+
+# Operating System files
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+.DS_Store
+.Spotlight-V100
+.Trashes
+
