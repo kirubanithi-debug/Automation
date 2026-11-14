@@ -32,6 +32,7 @@ def process_staad_file(
     progress_callback: Optional[Callable[[float, str], None]] = None,
     target_sheets: Optional[List[str]] = None,
     learning_store: Optional[MLLearningStore] = None,
+    include_summary_sheets: bool = False,
 ) -> Tuple[str, Dict[str, NodeAnalysis], ValidationReport, List[str]]:
     """
     Complete AI/ML-Assisted Processing Pipeline:
@@ -92,7 +93,7 @@ def process_staad_file(
     )
     validation_report = validator.validate()
 
-    report_progress(80, "Generating 5-sheet formatted Excel workbook matching Master Specification...")
+    report_progress(80, "Generating formatted Excel workbook...")
     exporter = StaadExporter(
         node_results=node_results,
         combined_df=combined_df,
@@ -104,6 +105,7 @@ def process_staad_file(
         anomalies=anomalies,
         validation_report=validation_report,
         input_file_path=input_file,
+        include_summary_sheets=include_summary_sheets,
     )
     final_output_file = exporter.generate_workbook(output_file)
     if final_output_file != output_file:

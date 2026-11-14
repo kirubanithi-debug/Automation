@@ -57,6 +57,7 @@ class MemberGoverningForces:
 
     all_governing_records: List[GoverningRecord] = field(default_factory=list)
     governing_lcs: List[str] = field(default_factory=list)
+    is_zero_moment: bool = False
 
 
 @dataclass
@@ -157,8 +158,22 @@ class StaadAnalyzer:
                     available_lcs=m_lcs,
                 )
 
-                # A. Moment-Z (kN-m)
+                # Check whether Moment-Z is zero (e.g. pinned / shear connection)
+                is_zero_moment = True
                 if "_clean_moment_z" in m_sub.columns:
+                    valid_mz = m_sub[m_sub["_clean_moment_z"].notna()]["_clean_moment_z"].astype(float)
+                    if not valid_mz.empty:
+                        max_mz_val = float(valid_mz.max())
+                        min_mz_val = float(valid_mz.min())
+                        # If either extreme is non-zero (above 1e-4), it is a moment-carrying member
+                        if abs(max_mz_val) > 1e-4 or abs(min_mz_val) > 1e-4:
+                            is_zero_moment = False
+
+                m_gov.is_zero_moment = is_zero_moment
+
+                # A. Moment-Z (kN-m) - Only evaluated if non-zero
+                # If Moment-Z is zero (pinned connection), bypass Moment-Z and govern by Shear-Y & Axial
+                if not is_zero_moment and "_clean_moment_z" in m_sub.columns:
                     m_max_mz, m_min_mz = self._find_extremes(
                         m_sub, "_clean_moment_z", "_raw_val_moment_z", FORCE_MOMENT_Z, "moment_z"
                     )

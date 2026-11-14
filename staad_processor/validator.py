@@ -147,23 +147,37 @@ class StaadValidator:
                         exp_max_ties = int((abs(valid_mz - exp_max) <= tol).sum())
                         exp_min_ties = int((abs(valid_mz - exp_min) <= tol).sum())
 
-                        if not m_gov.max_mz or abs(m_gov.max_mz[0].value - exp_max) > tol:
-                            report.add_fail(f"Check A: Node {node_id} Member {m_id} Moment-Z Max mismatch. Expected {exp_max}, got {m_gov.max_mz[0].value if m_gov.max_mz else None}")
-                            report.check_a_passed = False
-                        elif len(m_gov.max_mz) != exp_max_ties:
-                            report.add_fail(f"Check A: Node {node_id} Member {m_id} Moment-Z Max tie count mismatch. Expected {exp_max_ties}, got {len(m_gov.max_mz)}")
-                            report.check_a_passed = False
+                        if abs(exp_max) <= 1e-4 and abs(exp_min) <= 1e-4:
+                            # Zero Moment / Pinned Member Logic: Moment-Z bypassed, governed by Shear-Y & Axial
+                            if not m_gov.max_mz and not m_gov.min_mz:
+                                report.add_pass(
+                                    f"Check A Verified: Node {node_id} Member {m_id} Moment-Z is 0.000 (Pinned/Released). "
+                                    f"Correctly bypassed Moment-Z; governed by Shear-Y & Axial Force."
+                                )
+                            else:
+                                report.add_fail(
+                                    f"Check A Failure: Node {node_id} Member {m_id} Moment-Z is 0.000, "
+                                    f"but {len(m_gov.max_mz) + len(m_gov.min_mz)} zero-moment records were retained."
+                                )
+                                report.check_a_passed = False
                         else:
-                            report.add_pass(f"Check A Verified: Node {node_id} Member {m_id} Moment-Z Max = {exp_max:.3f} ({len(m_gov.max_mz)} ties retained)")
+                            if not m_gov.max_mz or abs(m_gov.max_mz[0].value - exp_max) > tol:
+                                report.add_fail(f"Check A: Node {node_id} Member {m_id} Moment-Z Max mismatch. Expected {exp_max}, got {m_gov.max_mz[0].value if m_gov.max_mz else None}")
+                                report.check_a_passed = False
+                            elif len(m_gov.max_mz) != exp_max_ties:
+                                report.add_fail(f"Check A: Node {node_id} Member {m_id} Moment-Z Max tie count mismatch. Expected {exp_max_ties}, got {len(m_gov.max_mz)}")
+                                report.check_a_passed = False
+                            else:
+                                report.add_pass(f"Check A Verified: Node {node_id} Member {m_id} Moment-Z Max = {exp_max:.3f} ({len(m_gov.max_mz)} ties retained)")
 
-                        if not m_gov.min_mz or abs(m_gov.min_mz[0].value - exp_min) > tol:
-                            report.add_fail(f"Check A: Node {node_id} Member {m_id} Moment-Z Min mismatch. Expected {exp_min}, got {m_gov.min_mz[0].value if m_gov.min_mz else None}")
-                            report.check_a_passed = False
-                        elif len(m_gov.min_mz) != exp_min_ties:
-                            report.add_fail(f"Check A: Node {node_id} Member {m_id} Moment-Z Min tie count mismatch. Expected {exp_min_ties}, got {len(m_gov.min_mz)}")
-                            report.check_a_passed = False
-                        else:
-                            report.add_pass(f"Check A Verified: Node {node_id} Member {m_id} Moment-Z Min = {exp_min:.3f} ({len(m_gov.min_mz)} ties retained)")
+                            if not m_gov.min_mz or abs(m_gov.min_mz[0].value - exp_min) > tol:
+                                report.add_fail(f"Check A: Node {node_id} Member {m_id} Moment-Z Min mismatch. Expected {exp_min}, got {m_gov.min_mz[0].value if m_gov.min_mz else None}")
+                                report.check_a_passed = False
+                            elif len(m_gov.min_mz) != exp_min_ties:
+                                report.add_fail(f"Check A: Node {node_id} Member {m_id} Moment-Z Min tie count mismatch. Expected {exp_min_ties}, got {len(m_gov.min_mz)}")
+                                report.check_a_passed = False
+                            else:
+                                report.add_pass(f"Check A Verified: Node {node_id} Member {m_id} Moment-Z Min = {exp_min:.3f} ({len(m_gov.min_mz)} ties retained)")
 
                 # Check Shear-Y
                 if "_clean_shear_y" in m_df.columns:

@@ -94,6 +94,7 @@ class StaadExporter:
         anomalies: Optional[List[Dict[str, Any]]] = None,
         validation_report: Optional[Any] = None,
         input_file_path: Optional[str] = None,
+        include_summary_sheets: bool = False,
     ):
         self.node_results = node_results
         self.combined_df = combined_df
@@ -105,6 +106,7 @@ class StaadExporter:
         self.anomalies = anomalies or []
         self.validation_report = validation_report
         self.input_file_path = input_file_path
+        self.include_summary_sheets = include_summary_sheets
 
         self.wb: openpyxl.Workbook = openpyxl.Workbook()
         self.wb.remove(self.wb.active)
@@ -135,12 +137,16 @@ class StaadExporter:
         # 2. Build dedicated tabs for each Node (e.g. 'Node 136', 'Node 149', etc.)
         self._build_node_tabs()
 
-        # 3. Build Master Summary and Validation sheets
-        self._build_sheet1_governing_summary()
-        self._build_sheet2_node_wise_unique_lcs()
-        self._build_sheet3_governing_source_records()
-        self._build_sheet4_combined_source_data()
-        self._build_sheet5_validation_report()
+        # 3. Build Master Summary and Validation sheets ONLY if explicitly requested
+        if self.include_summary_sheets:
+            self._build_sheet1_governing_summary()
+            self._build_sheet2_node_wise_unique_lcs()
+            self._build_sheet3_governing_source_records()
+            self._build_sheet4_combined_source_data()
+            self._build_sheet5_validation_report()
+
+        if len(self.wb.sheetnames) == 0:
+            self.wb.create_sheet(title="Governing Results")
 
         try:
             self.wb.save(output_file_path)

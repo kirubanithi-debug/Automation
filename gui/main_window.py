@@ -216,7 +216,15 @@ class StaadAppGUI(tk.Tk):
             command=self._open_output_folder,
             state="disabled",
         )
-        self.open_folder_btn.pack(side=tk.LEFT)
+        self.open_folder_btn.pack(side=tk.LEFT, padx=(0, 10))
+
+        self.include_summary_var = tk.BooleanVar(value=False)
+        self.summary_chk = ttk.Checkbutton(
+            action_frame,
+            text="Generate extra summary sheets (Summary, Audit)",
+            variable=self.include_summary_var,
+        )
+        self.summary_chk.pack(side=tk.LEFT, padx=(10, 0))
 
         # Progress Bar and Status Label
         prog_frame = ttk.Frame(container)
@@ -494,6 +502,7 @@ class StaadAppGUI(tk.Tk):
                 input_file=input_file,
                 output_file=output_path,
                 progress_callback=on_progress,
+                include_summary_sheets=self.include_summary_var.get(),
             )
 
             self.last_generated_file = out_file

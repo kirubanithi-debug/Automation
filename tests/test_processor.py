@@ -185,6 +185,7 @@ class TestStaadProcessorAIML(unittest.TestCase):
         out_path, node_results, val_report, sheets_loaded = process_staad_file(
             input_file=self.sample_input,
             output_file=self.output_file,
+            include_summary_sheets=True,
         )
 
         self.assertTrue(os.path.exists(out_path))
@@ -313,6 +314,70 @@ class TestStaadProcessorAIML(unittest.TestCase):
         self.assertTrue(saved_path.endswith("_1.xlsx"))
         self.assertTrue(os.path.exists(saved_path))
         os.remove(saved_path)
+
+    def test_10_zero_moment_pinned_connection_logic(self):
+        """Test pinned member logic: when Moment-Z is 0.0, govern by Shear-Y & Axial Force, mark yellow."""
+        zero_mz_data = pd.DataFrame({
+            "_clean_node": ["50", "50", "50", "50", "50"],
+            "_clean_member": ["999", "999", "999", "999", "999"],
+            "_clean_lc": ["101", "102", "103", "104", "105"],
+            "_clean_moment_z": [0.0, 0.0, 0.0, 0.0, 0.0],
+            "_clean_shear_y": [-150.0, 80.0, 220.0, -50.0, 10.0],  # Min: -150 (101), Max: 220 (103)
+            "_clean_axial": [15.0, -85.0, 5.0, 45.0, -20.0],       # Min: -85 (102), Max: 45 (104)
+            "_raw_val_moment_z": [0.0, 0.0, 0.0, 0.0, 0.0],
+            "_raw_val_shear_y": [-150.0, 80.0, 220.0, -50.0, 10.0],
+            "_raw_val_axial": [15.0, -85.0, 5.0, 45.0, -20.0],
+            "_source_sheet": ["JB-F", "JB-F", "JB-F", "JB-F", "JB-F"],
+            "_original_sheet_row": [10, 11, 12, 13, 14],
+        })
+
+        analyzer = StaadAnalyzer(zero_mz_data)
+        results = analyzer.run_analysis()
+        self.assertIn("50", results)
+
+        node50 = results["50"]
+        m999 = node50.member_governing_forces["999"]
+        self.assertTrue(m999.is_zero_moment, "Member 999 must be recognized as zero moment / pinned.")
+
+        # Moment-Z extremes must NOT capture all 5 zero rows
+        self.assertEqual(len(m999.max_mz), 0)
+        self.assertEqual(len(m999.min_mz), 0)
+
+        # Shear-Y extremes: Max = 220.0 (L/C 103), Min = -150.0 (L/C 101)
+        self.assertEqual(len(m999.max_fy), 1)
+        self.assertEqual(m999.max_fy[0].value, 220.0)
+        self.assertEqual(m999.max_fy[0].lc, "103")
+        self.assertEqual(len(m999.min_fy), 1)
+        self.assertEqual(m999.min_fy[0].value, -150.0)
+        self.assertEqual(m999.min_fy[0].lc, "101")
+
+        # Axial Force extremes: Max = 45.0 (L/C 104), Min = -85.0 (L/C 102)
+        self.assertEqual(len(m999.max_fx), 1)
+        self.assertEqual(m999.max_fx[0].value, 45.0)
+        self.assertEqual(m999.max_fx[0].lc, "104")
+        self.assertEqual(len(m999.min_fx), 1)
+        self.assertEqual(m999.min_fx[0].value, -85.0)
+        self.assertEqual(m999.min_fx[0].lc, "102")
+
+        # Governing rows in highlight_map must only be rows 10, 11, 12, 13 (not 14)
+        highlighted_rows = {k[1] for k in analyzer.highlight_map.keys()}
+        self.assertEqual(highlighted_rows, {10, 11, 12, 13})
+        self.assertNotIn(14, highlighted_rows)
+
+        # Node unique L/Cs: exactly 101, 102, 103, 104 (L/C 105 did not govern)
+        self.assertEqual(node50.unique_governing_lcs, ["101", "102", "103", "104"])
+
+        # Validate with StaadValidator
+        validator = StaadValidator(
+            node_results=results,
+            combined_df=zero_mz_data,
+            sheets_loaded=["JB-F"],
+            invalid_force_records=[],
+            expected_sheets=["JB-F"],
+        )
+        report = validator.validate()
+        self.assertTrue(report.is_valid, f"Validation failed: {report.errors}")
+        self.assertEqual(report.checks_failed, 0)
 
 
 if __name__ == "__main__":
