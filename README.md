@@ -4,6 +4,8 @@ A professional Python desktop and command-line application combining **Machine L
 
 > **CRITICAL ENGINEERING PRINCIPLE**: Engineering calculations strictly use actual STAAD.Pro numbers. Machine learning is used exclusively for worksheet recognition, semantic header interpretation, confidence scoring, and anomaly detection. ML never predicts, fabricates, or modifies structural force values.
 
+> 📖 **Comprehensive Documentation**: For a deep-dive explanation of all code, engineering logic, mathematical definitions, and extraction steps, see [docs/CODE_AND_LOGIC_EXPLANATION.md](file:///d:/Automation/docs/CODE_AND_LOGIC_EXPLANATION.md).
+
 ---
 
 ## 1. Five Output Worksheets (Master Specification)
