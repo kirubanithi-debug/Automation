@@ -48,7 +48,7 @@ class StaadAppGUI(tk.Tk):
         self.output_dir_var = tk.StringVar()
         self.output_name_var = tk.StringVar(value="STAAD_Governing_Forces_STEP1.xlsx")
         self.progress_var = tk.DoubleVar(value=0.0)
-        self.status_var = tk.StringVar(value="Ready. Please select a STAAD.Pro Excel workbook with R-L, R-R, JB-F, JB-B.")
+        self.status_var = tk.StringVar(value="Ready. Please select a STAAD.Pro Excel workbook (R-L, R-R, JB-F, JB-B, JB, TB).")
 
         self.last_generated_file: Optional[str] = None
         self.is_processing = False
@@ -272,7 +272,7 @@ class StaadAppGUI(tk.Tk):
         self.log_text.tag_configure("ERROR", foreground="#DC2626", font=("Consolas", 9, "bold"))
         self.log_text.tag_configure("MUTED", foreground="#64748B")
 
-        self._log("System initialized for STEP 1. Target worksheets: R-L, R-R, JB-F, JB-B.", "INFO")
+        self._log("System initialized. Auto-discovering member worksheets (R-L, R-R, JB-F, JB-B, JB, TB)...", "INFO")
 
     def _log(self, message: str, tag: str = "INFO"):
         """Thread-safe log message appender."""
@@ -510,8 +510,12 @@ class StaadAppGUI(tk.Tk):
             # Log Node summary
             self._log(f"\nSuccessfully processed {len(node_results)} nodes across worksheets: {sheets_loaded}", "SUCCESS")
             for node_id, a in node_results.items():
+                if a.connected_member_details:
+                    members_desc = [f"{d.member} ({d.beam_type})" if d.beam_type else d.member for d in a.connected_member_details]
+                else:
+                    members_desc = a.connected_members
                 self._log(
-                    f"  • Node {node_id:>3}: {len(a.connected_members)} members {a.connected_members} | "
+                    f"  • Node {node_id:>3}: {len(a.connected_members)} members {members_desc} | "
                     f"Unique L/Cs: {a.unique_governing_lcs}",
                     "MUTED",
                 )

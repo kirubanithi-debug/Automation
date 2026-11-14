@@ -19,7 +19,7 @@ def parse_args():
         "input_file",
         nargs="?",
         default=None,
-        help="Path to STAAD.Pro Excel workbook containing R-L, R-R, JB-F, JB-B worksheets.",
+        help="Path to STAAD.Pro Excel workbook (e.g. R-L, R-R, JB-F, JB-B, JB, TB).",
     )
     parser.add_argument(
         "-o",

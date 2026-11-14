@@ -11,6 +11,7 @@ import openpyxl
 
 from .config import (
     DEFAULT_TARGET_SHEETS,
+    STANDARD_MEMBER_SHEET_PATTERNS,
     COLUMN_ALIASES,
     FORCE_MOMENT_Z,
     FORCE_SHEAR_Y,
@@ -205,7 +206,8 @@ class StaadReader:
         classifier: Optional[MLColumnClassifier] = None,
     ):
         self.file_path = file_path
-        self.target_sheet_names = target_sheets or DEFAULT_TARGET_SHEETS
+        self.explicit_targets = target_sheets is not None
+        self.target_sheet_names = target_sheets
         self.wb = openpyxl.load_workbook(file_path, data_only=True)
         self.available_sheets = self.wb.sheetnames
 
@@ -227,37 +229,49 @@ class StaadReader:
         max_scan_rows: int = DEFAULT_MAX_HEADER_SCAN_ROWS,
     ) -> Tuple[pd.DataFrame, Dict[str, pd.DataFrame], List[Dict[str, Any]]]:
         """
-        Loads worksheets using ML classification, parses numeric forces,
+        Loads worksheets using dynamic discovery and ML classification, parses numeric forces,
         and generates a combined DataFrame with exact original Excel row tracking.
+        Automatically discovers all member force sheets (e.g. R-L, R-R, JB-F, JB-B, JB, TB).
         """
-        matched_sheets: Dict[str, str] = {}
-        for target in self.target_sheet_names:
-            found = None
-            for actual in self.available_sheets:
-                if match_sheet_name(actual, target):
-                    found = actual
-                    break
-            if found:
-                matched_sheets[target] = found
-            else:
-                self.sheets_missing.append(target)
+        sheets_to_process: List[str] = []
 
-        sheets_to_process = list(matched_sheets.values())
-        if not sheets_to_process:
+        if self.explicit_targets and self.target_sheet_names:
+            # Caller specified explicit target sheets
+            matched_sheets: Dict[str, str] = {}
+            for target in self.target_sheet_names:
+                found = None
+                for actual in self.available_sheets:
+                    if match_sheet_name(actual, target):
+                        found = actual
+                        break
+                if found:
+                    matched_sheets[target] = found
+                    if found not in sheets_to_process:
+                        sheets_to_process.append(found)
+                else:
+                    self.sheets_missing.append(target)
+        else:
+            # Dynamic auto-discovery:
+            # Inspect every available sheet in the workbook for STAAD member end force tables.
+            # Seamlessly handles variations like JB-F & JB-B, single JB, Tie Beams (TB), Rafters (R-L, R-R), etc.
             for s in self.available_sheets:
                 ws = self.wb[s]
                 sheet_data = list(ws.iter_rows(values_only=True))
                 h_idx, col_map, _, _ = find_header_row_ml(
                     sheet_data, classifier=self.classifier, max_rows=max_scan_rows
                 )
-                if h_idx != -1 and "node" in col_map and "member" in col_map:
-                    sheets_to_process.append(s)
+                is_member_table = (h_idx != -1 and "node" in col_map and "member" in col_map)
+                name_match = any(match_sheet_name(s, pat) for pat in STANDARD_MEMBER_SHEET_PATTERNS)
+
+                if is_member_table or (name_match and h_idx != -1):
+                    if s not in sheets_to_process:
+                        sheets_to_process.append(s)
 
         if not sheets_to_process:
             raise ValueError(
                 f"No valid member force worksheets found in '{self.file_path}'. "
-                f"Expected worksheets: {self.target_sheet_names}. "
-                f"Available worksheets: {self.available_sheets}."
+                f"Available worksheets: {self.available_sheets}. "
+                "Ensure at least one sheet contains STAAD member end force tables (with Node and Member headers)."
             )
 
         self.sheets_found = sheets_to_process

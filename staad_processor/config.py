@@ -10,7 +10,33 @@ APP_NAME = "AI/ML STAAD.Pro Governing Force Extraction System"
 APP_VERSION = "4.0.0"
 
 # Target member-force worksheets in STAAD.Pro export
-DEFAULT_TARGET_SHEETS = ["R-L", "R-R", "JB-F", "JB-B"]
+# Supports standard 4-sheet models (R-L, R-R, JB-F, JB-B), combined/alternative models (R-L, R-R, JB, TB),
+# or any combination of structural member worksheets.
+DEFAULT_TARGET_SHEETS = ["R-L", "R-R", "JB-F", "JB-B", "JB", "TB"]
+
+# Standard recognized structural member sheet prefixes and aliases
+STANDARD_MEMBER_SHEET_PATTERNS = [
+    "r-l", "r-r", "rl", "rr", "r", "rafter",
+    "jb-f", "jb-b", "jbf", "jbb", "jb", "jack", "jack beam", "jackbeam",
+    "tb", "tb-f", "tb-b", "tbf", "tbb", "tie", "tie beam", "tiebeam",
+]
+
+# Canonical Structural Beam & Member Types
+BEAM_TYPE_RAFTER_LEFT = "Rafter (Left)"
+BEAM_TYPE_RAFTER_RIGHT = "Rafter (Right)"
+BEAM_TYPE_RAFTER = "Rafter"
+BEAM_TYPE_JACK_BEAM_FRONT = "Jack Beam (Front)"
+BEAM_TYPE_JACK_BEAM_BACK = "Jack Beam (Back)"
+BEAM_TYPE_JACK_BEAM = "Jack Beam"
+BEAM_TYPE_TIE_BEAM = "Tie Beam"
+BEAM_TYPE_COLUMN = "Column"
+BEAM_TYPE_BRACING = "Bracing / Strut"
+BEAM_TYPE_BEAM = "Beam"
+
+# Canonical Structural Connection Types
+CONN_TYPE_MOMENT = "Moment Connection"
+CONN_TYPE_PINNED = "Pinned Connection"
+CONN_TYPE_AXIAL_STRUT = "Pinned / Axial Strut"
 
 # Canonical Force Types
 FORCE_MOMENT_Z = "Moment-Z (kN-m)"

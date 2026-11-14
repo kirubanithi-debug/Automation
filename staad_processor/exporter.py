@@ -213,7 +213,7 @@ class StaadExporter:
                 return (1, n_str)
 
         raw_cols = [c for c in self.combined_df.columns if not c.startswith("_")]
-        display_headers = ["Source Sheet", "Original Row"] + raw_cols + ["Governing Reasons"]
+        display_headers = ["Source Sheet", "Original Row"] + raw_cols + ["Beam Type", "Connection", "Governing Reasons"]
 
         sorted_nodes = sorted(self.node_results.keys(), key=node_sort_key)
 
@@ -237,7 +237,13 @@ class StaadExporter:
             ws.row_dimensions[1].height = 28
 
             # Subtitle Summary
-            members_str = ", ".join(analysis.connected_members)
+            if analysis.connected_member_details:
+                members_str = ", ".join([
+                    f"{d.member} ({d.beam_type})" if d.beam_type else d.member
+                    for d in analysis.connected_member_details
+                ])
+            else:
+                members_str = ", ".join(analysis.connected_members)
             lcs_str = ", ".join(analysis.unique_governing_lcs)
             ws.merge_cells(f"A2:{title_end}2")
             sub_cell = ws.cell(
@@ -309,6 +315,23 @@ class StaadExporter:
                         c.value = val
                         c.alignment = ALIGN_CENTER
                         c.font = YELLOW_FONT
+
+                beam_type_val = rec_list[0].beam_type if rec_list and rec_list[0].beam_type else ""
+                conn_type_val = rec_list[0].connection_type if rec_list and rec_list[0].connection_type else ""
+
+                beam_col = len(raw_cols) + 3
+                c_beam = ws.cell(row=curr_row, column=beam_col, value=beam_type_val)
+                c_beam.alignment = ALIGN_CENTER
+                c_beam.font = YELLOW_FONT
+                c_beam.fill = YELLOW_FILL
+                c_beam.border = CELL_BORDER
+
+                conn_col = len(raw_cols) + 4
+                c_conn = ws.cell(row=curr_row, column=conn_col, value=conn_type_val)
+                c_conn.alignment = ALIGN_CENTER
+                c_conn.font = YELLOW_FONT
+                c_conn.fill = YELLOW_FILL
+                c_conn.border = CELL_BORDER
 
                 reason_col = len(display_headers)
                 c_reason = ws.cell(row=curr_row, column=reason_col, value=reason_str)

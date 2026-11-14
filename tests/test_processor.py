@@ -14,6 +14,7 @@ from staad_processor import (
     StaadReader,
     StaadAnalyzer,
     StaadValidator,
+    StaadExporter,
     MLColumnClassifier,
     MLLearningStore,
 )
@@ -317,55 +318,63 @@ class TestStaadProcessorAIML(unittest.TestCase):
 
     def test_10_zero_moment_pinned_connection_logic(self):
         """Test pinned member logic: when Moment-Z is 0.0, govern by Shear-Y & Axial Force, mark yellow."""
+        # Replicates Screen Recording 2026-11-14 131115.mp4:
+        # Node 1457, Member 1072 in JB-F with Moment-Z = 0.0
+        # Shear-Y values: 0.146 (Min), 0.195 (Mid), 0.243 (Max)
+        # Chained Axial Force selection yields exactly Row 18 (L/C 1008) and Row 220 (L/C 1109)
         zero_mz_data = pd.DataFrame({
-            "_clean_node": ["50", "50", "50", "50", "50"],
-            "_clean_member": ["999", "999", "999", "999", "999"],
-            "_clean_lc": ["101", "102", "103", "104", "105"],
+            "_clean_node": ["1457", "1457", "1457", "1457", "1457"],
+            "_clean_member": ["1072", "1072", "1072", "1072", "1072"],
+            "_clean_lc": ["1000", "1001", "1008", "1109", "1200"],
             "_clean_moment_z": [0.0, 0.0, 0.0, 0.0, 0.0],
-            "_clean_shear_y": [-150.0, 80.0, 220.0, -50.0, 10.0],  # Min: -150 (101), Max: 220 (103)
-            "_clean_axial": [15.0, -85.0, 5.0, 45.0, -20.0],       # Min: -85 (102), Max: 45 (104)
+            "_clean_shear_y": [0.243, 0.146, 0.146, 0.243, 0.195],  # Min: 0.146, Max: 0.243
+            "_clean_axial": [-9.969, -41.524, 49.004, -43.702, 20.0],  # Cand Min: -43.702, Cand Max: 49.004
             "_raw_val_moment_z": [0.0, 0.0, 0.0, 0.0, 0.0],
-            "_raw_val_shear_y": [-150.0, 80.0, 220.0, -50.0, 10.0],
-            "_raw_val_axial": [15.0, -85.0, 5.0, 45.0, -20.0],
+            "_raw_val_shear_y": [0.243, 0.146, 0.146, 0.243, 0.195],
+            "_raw_val_axial": [-9.969, -41.524, 49.004, -43.702, 20.0],
             "_source_sheet": ["JB-F", "JB-F", "JB-F", "JB-F", "JB-F"],
-            "_original_sheet_row": [10, 11, 12, 13, 14],
+            "_original_sheet_row": [2, 4, 18, 220, 300],
         })
 
         analyzer = StaadAnalyzer(zero_mz_data)
         results = analyzer.run_analysis()
-        self.assertIn("50", results)
+        self.assertIn("1457", results)
 
-        node50 = results["50"]
-        m999 = node50.member_governing_forces["999"]
-        self.assertTrue(m999.is_zero_moment, "Member 999 must be recognized as zero moment / pinned.")
+        node1457 = results["1457"]
+        m1072 = node1457.member_governing_forces["1072"]
+        self.assertTrue(m1072.is_zero_moment, "Member 1072 must be recognized as zero moment / pinned.")
+        self.assertEqual(m1072.beam_type, "Jack Beam (Front)")
+        self.assertEqual(m1072.connection_type, "Pinned Connection")
 
-        # Moment-Z extremes must NOT capture all 5 zero rows
-        self.assertEqual(len(m999.max_mz), 0)
-        self.assertEqual(len(m999.min_mz), 0)
+        # Moment-Z extremes must NOT capture any zero rows
+        self.assertEqual(len(m1072.max_mz), 0)
+        self.assertEqual(len(m1072.min_mz), 0)
 
-        # Shear-Y extremes: Max = 220.0 (L/C 103), Min = -150.0 (L/C 101)
-        self.assertEqual(len(m999.max_fy), 1)
-        self.assertEqual(m999.max_fy[0].value, 220.0)
-        self.assertEqual(m999.max_fy[0].lc, "103")
-        self.assertEqual(len(m999.min_fy), 1)
-        self.assertEqual(m999.min_fy[0].value, -150.0)
-        self.assertEqual(m999.min_fy[0].lc, "101")
+        # Shear-Y extremes: Max = 0.243 (L/C 1109), Min = 0.146 (L/C 1008)
+        self.assertEqual(len(m1072.max_fy), 1)
+        self.assertEqual(m1072.max_fy[0].value, 0.243)
+        self.assertEqual(m1072.max_fy[0].lc, "1109")
+        self.assertEqual(len(m1072.min_fy), 1)
+        self.assertEqual(m1072.min_fy[0].value, 0.146)
+        self.assertEqual(m1072.min_fy[0].lc, "1008")
 
-        # Axial Force extremes: Max = 45.0 (L/C 104), Min = -85.0 (L/C 102)
-        self.assertEqual(len(m999.max_fx), 1)
-        self.assertEqual(m999.max_fx[0].value, 45.0)
-        self.assertEqual(m999.max_fx[0].lc, "104")
-        self.assertEqual(len(m999.min_fx), 1)
-        self.assertEqual(m999.min_fx[0].value, -85.0)
-        self.assertEqual(m999.min_fx[0].lc, "102")
+        # Axial Force extremes from candidate pool: Max = 49.004 (L/C 1008), Min = -43.702 (L/C 1109)
+        self.assertEqual(len(m1072.max_fx), 1)
+        self.assertEqual(m1072.max_fx[0].value, 49.004)
+        self.assertEqual(m1072.max_fx[0].lc, "1008")
+        self.assertEqual(len(m1072.min_fx), 1)
+        self.assertEqual(m1072.min_fx[0].value, -43.702)
+        self.assertEqual(m1072.min_fx[0].lc, "1109")
 
-        # Governing rows in highlight_map must only be rows 10, 11, 12, 13 (not 14)
+        # Governing rows in highlight_map must only be rows 18 and 220 (exactly 2 rows, matching video!)
         highlighted_rows = {k[1] for k in analyzer.highlight_map.keys()}
-        self.assertEqual(highlighted_rows, {10, 11, 12, 13})
-        self.assertNotIn(14, highlighted_rows)
+        self.assertEqual(highlighted_rows, {18, 220})
+        self.assertNotIn(2, highlighted_rows)
+        self.assertNotIn(4, highlighted_rows)
+        self.assertNotIn(300, highlighted_rows)
 
-        # Node unique L/Cs: exactly 101, 102, 103, 104 (L/C 105 did not govern)
-        self.assertEqual(node50.unique_governing_lcs, ["101", "102", "103", "104"])
+        # Node unique L/Cs: exactly 1008 and 1109 (exactly 2 L/Cs)
+        self.assertEqual(node1457.unique_governing_lcs, ["1008", "1109"])
 
         # Validate with StaadValidator
         validator = StaadValidator(
@@ -378,6 +387,157 @@ class TestStaadProcessorAIML(unittest.TestCase):
         report = validator.validate()
         self.assertTrue(report.is_valid, f"Validation failed: {report.errors}")
         self.assertEqual(report.checks_failed, 0)
+
+    def test_11_dynamic_sheet_discovery_jb_and_tb(self):
+        """
+        Test dynamic sheet discovery when an Excel workbook uses 'JB' and 'TB'
+        instead of 'JB-F' and 'JB-B', along with non-data sheets like 'Notes'.
+        """
+        import tempfile
+        import openpyxl
+
+        wb = openpyxl.Workbook()
+        # Sheet 1: R-L
+        ws_rl = wb.active
+        ws_rl.title = "R-L"
+        ws_rl.append(["Beam", "L/C", "Node", "Axial Force (kN)", "Shear-Y (kN)", "Moment-Z (kN-m)"])
+        ws_rl.append([101, 1, 50, 10.0, 50.0, 120.0])
+        ws_rl.append([101, 2, 50, -20.0, -40.0, -110.0])
+
+        # Sheet 2: R-R
+        ws_rr = wb.create_sheet("R-R")
+        ws_rr.append(["Beam", "L/C", "Node", "Axial Force (kN)", "Shear-Y (kN)", "Moment-Z (kN-m)"])
+        ws_rr.append([102, 1, 50, 12.0, 45.0, 95.0])
+        ws_rr.append([102, 2, 50, -18.0, -35.0, -90.0])
+
+        # Sheet 3: JB (Jack Beam, Moment-Z = 0.0)
+        ws_jb = wb.create_sheet("JB")
+        ws_jb.append(["Beam", "L/C", "Node", "Axial Force (kN)", "Shear-Y (kN)", "Moment-Z (kN-m)"])
+        ws_jb.append([103, 1, 50, 5.0, 0.250, 0.0])
+        ws_jb.append([103, 2, 50, -30.0, 0.250, 0.0])
+        ws_jb.append([103, 3, 50, 40.0, 0.150, 0.0])
+
+        # Sheet 4: TB (Tie Beam, Moment-Z = 0.0)
+        ws_tb = wb.create_sheet("TB")
+        ws_tb.append(["Beam", "L/C", "Node", "Axial Force (kN)", "Shear-Y (kN)", "Moment-Z (kN-m)"])
+        ws_tb.append([104, 1, 50, 100.0, 0.100, 0.0])
+        ws_tb.append([104, 2, 50, -80.0, 0.200, 0.0])
+
+        # Sheet 5: Notes (Non-data sheet without member tables)
+        ws_notes = wb.create_sheet("Notes")
+        ws_notes.append(["Project Name: Warehouse Phase 2"])
+        ws_notes.append(["Engineer: Structural Team"])
+
+        temp_dir = tempfile.mkdtemp()
+        temp_input = os.path.join(temp_dir, "test_dynamic_jb_tb.xlsx")
+        temp_output = os.path.join(temp_dir, "test_dynamic_jb_tb_out.xlsx")
+        wb.save(temp_input)
+
+        try:
+            reader = StaadReader(temp_input)
+            combined_df, per_sheet_dfs, invalid = reader.load_worksheets()
+
+            # Dynamic discovery must find R-L, R-R, JB, and TB, safely ignoring Notes
+            self.assertEqual(set(reader.sheets_found), {"R-L", "R-R", "JB", "TB"})
+            self.assertNotIn("Notes", reader.sheets_found)
+
+            analyzer = StaadAnalyzer(combined_df)
+            node_results = analyzer.run_analysis()
+            self.assertIn("50", node_results)
+
+            n50 = node_results["50"]
+            self.assertEqual(set(n50.connected_members), {"101", "102", "103", "104"})
+
+            # Verify JB and TB recognized as zero-moment pinned connections
+            m101 = n50.member_governing_forces["101"]
+            self.assertFalse(m101.is_zero_moment)
+            self.assertEqual(m101.beam_type, "Rafter (Left)")
+            self.assertEqual(m101.connection_type, "Moment Connection")
+
+            m102 = n50.member_governing_forces["102"]
+            self.assertFalse(m102.is_zero_moment)
+            self.assertEqual(m102.beam_type, "Rafter (Right)")
+            self.assertEqual(m102.connection_type, "Moment Connection")
+
+            m103 = n50.member_governing_forces["103"]
+            self.assertTrue(m103.is_zero_moment)
+            self.assertEqual(m103.beam_type, "Jack Beam")
+            self.assertEqual(m103.connection_type, "Pinned Connection")
+
+            m104 = n50.member_governing_forces["104"]
+            self.assertTrue(m104.is_zero_moment)
+            self.assertEqual(m104.beam_type, "Tie Beam")
+            self.assertEqual(m104.connection_type, "Pinned / Axial Strut")
+
+            # Validate with StaadValidator (dynamic sheets_loaded)
+            validator = StaadValidator(
+                node_results=node_results,
+                combined_df=combined_df,
+                sheets_loaded=reader.sheets_found,
+                invalid_force_records=[],
+            )
+            report = validator.validate()
+            self.assertTrue(report.is_valid, f"Validation failed: {report.errors}")
+            self.assertEqual(report.checks_failed, 0)
+
+            # Exporter: output must include source sheets with highlights and dedicated joint tab
+            exporter = StaadExporter(
+                node_results=node_results,
+                combined_df=combined_df,
+                highlight_map=analyzer.highlight_map,
+                sheets_loaded=reader.sheets_found,
+                per_sheet_col_mappings=reader.per_sheet_col_mappings,
+                per_sheet_confidences=reader.per_sheet_confidences,
+                per_sheet_bases=reader.per_sheet_bases,
+                input_file_path=temp_input,
+                include_summary_sheets=False,
+            )
+            saved_file = exporter.generate_workbook(temp_output)
+            self.assertTrue(os.path.exists(saved_file))
+
+            out_wb = openpyxl.load_workbook(saved_file)
+            self.assertIn("R-L", out_wb.sheetnames)
+            self.assertIn("R-R", out_wb.sheetnames)
+            self.assertIn("JB", out_wb.sheetnames)
+            self.assertIn("TB", out_wb.sheetnames)
+            self.assertIn("Node 50", out_wb.sheetnames)
+
+            # Verify yellow highlight exists in JB and TB
+            ws_out_jb = out_wb["JB"]
+            has_yellow_jb = any(
+                str(ws_out_jb.cell(row=r, column=1).fill.start_color.rgb) in ("00FFFF00", "FFFF00")
+                for r in range(2, ws_out_jb.max_row + 1)
+            )
+            self.assertTrue(has_yellow_jb, "Governing rows in 'JB' must be highlighted in yellow.")
+
+            ws_out_tb = out_wb["TB"]
+            has_yellow_tb = any(
+                str(ws_out_tb.cell(row=r, column=1).fill.start_color.rgb) in ("00FFFF00", "FFFF00")
+                for r in range(2, ws_out_tb.max_row + 1)
+            )
+            self.assertTrue(has_yellow_tb, "Governing rows in 'TB' must be highlighted in yellow.")
+
+            # Verify Node 50 tab includes Beam Type and Connection columns
+            ws_node50 = out_wb["Node 50"]
+            node50_headers = [ws_node50.cell(row=4, column=c).value for c in range(1, ws_node50.max_column + 1)]
+            self.assertIn("Beam Type", node50_headers)
+            self.assertIn("Connection", node50_headers)
+            self.assertIn("Governing Reasons", node50_headers)
+
+            # Subtitle check
+            sub_val = str(ws_node50.cell(row=2, column=1).value)
+            self.assertIn("Rafter (Left)", sub_val)
+            self.assertIn("Jack Beam", sub_val)
+            self.assertIn("Tie Beam", sub_val)
+
+        finally:
+            if os.path.exists(temp_input):
+                os.remove(temp_input)
+            if os.path.exists(temp_output):
+                os.remove(temp_output)
+            if os.path.exists(temp_dir):
+                import shutil
+                shutil.rmtree(temp_dir, ignore_errors=True)
 
 
 if __name__ == "__main__":

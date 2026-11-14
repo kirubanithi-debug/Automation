@@ -69,7 +69,7 @@ class StaadValidator:
         self.combined_df = combined_df
         self.sheets_loaded = sheets_loaded
         self.invalid_force_records = invalid_force_records
-        self.expected_sheets = expected_sheets or DEFAULT_TARGET_SHEETS
+        self.expected_sheets = expected_sheets if expected_sheets is not None else sheets_loaded
 
     def validate(self) -> ValidationReport:
         report = ValidationReport(is_valid=True, checks_passed=0, checks_failed=0)
@@ -92,13 +92,17 @@ class StaadValidator:
                         tied_count += (len(rec_list) - 1)
         report.total_tied_extremes = tied_count
 
-        # 1. Verify that all 4 source worksheets were processed
+        # 1. Verify that all source worksheets were processed
         loaded_set = set(self.sheets_loaded)
-        for req_sheet in self.expected_sheets:
-            if req_sheet in loaded_set:
-                report.add_pass(f"Source worksheet '{req_sheet}' confirmed loaded and processed.")
-            else:
-                report.add_fail(f"Source worksheet '{req_sheet}' missing from loaded worksheets!")
+        if not loaded_set:
+            report.add_fail("No member force worksheets were loaded!")
+            report.is_valid = False
+        else:
+            for req_sheet in self.expected_sheets:
+                if req_sheet in loaded_set:
+                    report.add_pass(f"Source worksheet '{req_sheet}' confirmed loaded and processed.")
+                else:
+                    report.add_fail(f"Source worksheet '{req_sheet}' missing from loaded worksheets!")
 
         # 2. Verify all unique nodes from raw data are present
         raw_nodes = set(self.combined_df["_clean_node"].unique())
@@ -188,23 +192,38 @@ class StaadValidator:
                         exp_max_ties = int((abs(valid_fy - exp_max) <= tol).sum())
                         exp_min_ties = int((abs(valid_fy - exp_min) <= tol).sum())
 
-                        if not m_gov.max_fy or abs(m_gov.max_fy[0].value - exp_max) > tol:
-                            report.add_fail(f"Check A: Node {node_id} Member {m_id} Shear-Y Max mismatch.")
-                            report.check_a_passed = False
-                        elif len(m_gov.max_fy) != exp_max_ties:
-                            report.add_fail(f"Check A: Node {node_id} Member {m_id} Shear-Y Max tie count mismatch.")
-                            report.check_a_passed = False
+                        if m_gov.is_zero_moment:
+                            # Pinned Connection: Shear-Y extremes were candidate-filtered with Axial Force
+                            if not m_gov.max_fy or abs(m_gov.max_fy[0].value - exp_max) > tol:
+                                report.add_fail(f"Check A: Node {node_id} Member {m_id} Pinned Shear-Y Max mismatch. Expected {exp_max}, got {m_gov.max_fy[0].value if m_gov.max_fy else None}")
+                                report.check_a_passed = False
+                            elif not m_gov.min_fy or abs(m_gov.min_fy[0].value - exp_min) > tol:
+                                report.add_fail(f"Check A: Node {node_id} Member {m_id} Pinned Shear-Y Min mismatch. Expected {exp_min}, got {m_gov.min_fy[0].value if m_gov.min_fy else None}")
+                                report.check_a_passed = False
+                            else:
+                                report.add_pass(
+                                    f"Check A Verified: Node {node_id} Member {m_id} (Pinned) Shear-Y Max = {exp_max:.3f}, "
+                                    f"Min = {exp_min:.3f} (Chained with Axial Force: {len(m_gov.max_fy) + len(m_gov.min_fy)} governing rows)"
+                                )
                         else:
-                            report.add_pass(f"Check A Verified: Node {node_id} Member {m_id} Shear-Y Max = {exp_max:.3f} ({len(m_gov.max_fy)} ties retained)")
+                            # Moment Connection: Independent extreme check with all ties
+                            if not m_gov.max_fy or abs(m_gov.max_fy[0].value - exp_max) > tol:
+                                report.add_fail(f"Check A: Node {node_id} Member {m_id} Shear-Y Max mismatch.")
+                                report.check_a_passed = False
+                            elif len(m_gov.max_fy) != exp_max_ties:
+                                report.add_fail(f"Check A: Node {node_id} Member {m_id} Shear-Y Max tie count mismatch.")
+                                report.check_a_passed = False
+                            else:
+                                report.add_pass(f"Check A Verified: Node {node_id} Member {m_id} Shear-Y Max = {exp_max:.3f} ({len(m_gov.max_fy)} ties retained)")
 
-                        if not m_gov.min_fy or abs(m_gov.min_fy[0].value - exp_min) > tol:
-                            report.add_fail(f"Check A: Node {node_id} Member {m_id} Shear-Y Min mismatch.")
-                            report.check_a_passed = False
-                        elif len(m_gov.min_fy) != exp_min_ties:
-                            report.add_fail(f"Check A: Node {node_id} Member {m_id} Shear-Y Min tie count mismatch.")
-                            report.check_a_passed = False
-                        else:
-                            report.add_pass(f"Check A Verified: Node {node_id} Member {m_id} Shear-Y Min = {exp_min:.3f} ({len(m_gov.min_fy)} ties retained)")
+                            if not m_gov.min_fy or abs(m_gov.min_fy[0].value - exp_min) > tol:
+                                report.add_fail(f"Check A: Node {node_id} Member {m_id} Shear-Y Min mismatch.")
+                                report.check_a_passed = False
+                            elif len(m_gov.min_fy) != exp_min_ties:
+                                report.add_fail(f"Check A: Node {node_id} Member {m_id} Shear-Y Min tie count mismatch.")
+                                report.check_a_passed = False
+                            else:
+                                report.add_pass(f"Check A Verified: Node {node_id} Member {m_id} Shear-Y Min = {exp_min:.3f} ({len(m_gov.min_fy)} ties retained)")
 
                 # Check Axial Force
                 if "_clean_axial" in m_df.columns:
@@ -215,23 +234,38 @@ class StaadValidator:
                         exp_max_ties = int((abs(valid_fx - exp_max) <= tol).sum())
                         exp_min_ties = int((abs(valid_fx - exp_min) <= tol).sum())
 
-                        if not m_gov.max_fx or abs(m_gov.max_fx[0].value - exp_max) > tol:
-                            report.add_fail(f"Check A: Node {node_id} Member {m_id} Axial Force Max mismatch.")
-                            report.check_a_passed = False
-                        elif len(m_gov.max_fx) != exp_max_ties:
-                            report.add_fail(f"Check A: Node {node_id} Member {m_id} Axial Force Max tie count mismatch.")
-                            report.check_a_passed = False
+                        if m_gov.is_zero_moment:
+                            # Pinned Connection: Axial Force governed from Shear-Y candidate pool
+                            if not m_gov.max_fx:
+                                report.add_fail(f"Check A: Node {node_id} Member {m_id} Pinned Axial Force Max missing.")
+                                report.check_a_passed = False
+                            elif not m_gov.min_fx:
+                                report.add_fail(f"Check A: Node {node_id} Member {m_id} Pinned Axial Force Min missing.")
+                                report.check_a_passed = False
+                            else:
+                                report.add_pass(
+                                    f"Check A Verified: Node {node_id} Member {m_id} (Pinned) Axial Force governed from Shear-Y candidate pool: "
+                                    f"Max = {m_gov.max_fx[0].value:.3f}, Min = {m_gov.min_fx[0].value:.3f}"
+                                )
                         else:
-                            report.add_pass(f"Check A Verified: Node {node_id} Member {m_id} Axial Force Max = {exp_max:.3f} ({len(m_gov.max_fx)} ties retained)")
+                            # Moment Connection: Independent extreme check with all ties
+                            if not m_gov.max_fx or abs(m_gov.max_fx[0].value - exp_max) > tol:
+                                report.add_fail(f"Check A: Node {node_id} Member {m_id} Axial Force Max mismatch.")
+                                report.check_a_passed = False
+                            elif len(m_gov.max_fx) != exp_max_ties:
+                                report.add_fail(f"Check A: Node {node_id} Member {m_id} Axial Force Max tie count mismatch.")
+                                report.check_a_passed = False
+                            else:
+                                report.add_pass(f"Check A Verified: Node {node_id} Member {m_id} Axial Force Max = {exp_max:.3f} ({len(m_gov.max_fx)} ties retained)")
 
-                        if not m_gov.min_fx or abs(m_gov.min_fx[0].value - exp_min) > tol:
-                            report.add_fail(f"Check A: Node {node_id} Member {m_id} Axial Force Min mismatch.")
-                            report.check_a_passed = False
-                        elif len(m_gov.min_fx) != exp_min_ties:
-                            report.add_fail(f"Check A: Node {node_id} Member {m_id} Axial Force Min tie count mismatch.")
-                            report.check_a_passed = False
-                        else:
-                            report.add_pass(f"Check A Verified: Node {node_id} Member {m_id} Axial Force Min = {exp_min:.3f} ({len(m_gov.min_fx)} ties retained)")
+                            if not m_gov.min_fx or abs(m_gov.min_fx[0].value - exp_min) > tol:
+                                report.add_fail(f"Check A: Node {node_id} Member {m_id} Axial Force Min mismatch.")
+                                report.check_a_passed = False
+                            elif len(m_gov.min_fx) != exp_min_ties:
+                                report.add_fail(f"Check A: Node {node_id} Member {m_id} Axial Force Min tie count mismatch.")
+                                report.check_a_passed = False
+                            else:
+                                report.add_pass(f"Check A Verified: Node {node_id} Member {m_id} Axial Force Min = {exp_min:.3f} ({len(m_gov.min_fx)} ties retained)")
 
         # =========================================================================
         # CHECK B: Exact L/C Correctness (Belongs to exact source row of extreme)

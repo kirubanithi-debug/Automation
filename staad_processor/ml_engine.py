@@ -253,7 +253,8 @@ class MLSheetClassifier:
 
     def __init__(self):
         self.target_keywords = [
-            "r-l", "r-r", "jb-f", "jb-b", "rafter", "jack", "beam",
+            "r-l", "r-r", "jb-f", "jb-b", "jb", "tb", "tb-f", "tb-b",
+            "rafter", "jack", "jack beam", "tie", "tie beam", "beam",
             "member", "end forces", "force", "frame", "steel"
         ]
 
@@ -263,7 +264,7 @@ class MLSheetClassifier:
         score = 0.5 if has_member_table else 0.0
 
         # Exact target match
-        for kw in ["r-l", "r-r", "jb-f", "jb-b"]:
+        for kw in ["r-l", "r-r", "jb-f", "jb-b", "jb", "tb", "tb-f", "tb-b", "tie", "jack", "rafter"]:
             clean_kw = re.sub(r"[\s\-_]+", "", kw)
             clean_s = re.sub(r"[\s\-_]+", "", s)
             if clean_kw == clean_s or kw in s:
